@@ -1,0 +1,152 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Lachaise Assignment
+% LaTeX Template
+% Version 1.0 (26/6/2018)
+%
+% This template originates from:
+% http://www.LaTeXTemplates.com
+%
+% Authors:
+% Marion Lachaise & François Févotte
+% Vel (vel@LaTeXTemplates.com)
+%
+% License:
+% CC BY-NC-SA 3.0 (http://creativecommons.org/licenses/by-nc-sa/3.0/)
+% 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%----------------------------------------------------------------------------------------
+%	PACKAGES AND OTHER DOCUMENT CONFIGURATIONS
+%----------------------------------------------------------------------------------------
+
+\documentclass{article}
+\usepackage{float}
+
+\input{structure.tex} % Include the file specifying the document structure and custom commands
+
+%----------------------------------------------------------------------------------------
+%	ASSIGNMENT INFORMATION
+%----------------------------------------------------------------------------------------
+
+\title{Warehouse Robot Synchronization Simulation} % Title of the assignment
+
+\author{Boussaid Abderrazag & Mohamed Ben Hadj Nasr}
+\date{University of Tunis El Manar --- Higher Institute of Computer Science \\ \today} % University, school and/or department name(s) and a date
+
+%----------------------------------------------------------------------------------------
+
+\begin{document}
+
+\maketitle % Print the title
+
+%----------------------------------------------------------------------------------------
+%	INTRODUCTION
+%----------------------------------------------------------------------------------------
+
+\section*{Introduction} % Unnumbered section
+
+This mini-project demonstrates a fundamental concept in concurrent programming: resource synchronization. It simulates multiple warehouse robots attempting to access a shared shelf, illustrating the problems that can occur without proper synchronization and how those problems can be solved using locks.
+
+\section{The Problem: Race Conditions in Concurrent Access}
+
+\subsection{Scenario Overview}
+
+In the warehouse simulation, multiple robot threads simultaneously attempt to access a single shelf. Without proper synchronization, this creates a race condition - a situation where the behavior of the system depends on the relative timing of events, which can lead to unpredictable and undesirable outcomes.
+
+\subsection{Specific Issues Observed}
+When running the simulation without synchronization, the following problems occur:
+
+\begin{itemize}
+	\item Resource Corruption: Multiple robots might believe the shelf is available simultaneously.
+	\item Conflicting Access: Robots attempt to use the shelf while another robot is already using it.
+	\item Collision Risk: Physical robots would crash into each other at the shelf location.
+	\item Inconsistent State: The shelf\_available and current\_robot variables are read and modified by multiple threads without coordination.
+\end{itemize}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=0.7\textwidth]{./images/crash.png}
+	\caption{showcase How robots crash}
+	\label{fig:showcase-How-robots-crash}
+\end{figure}
+
+\subsection{Code Analysis of the Unsynchronized Implementation}
+
+\begin{file}[Main.py]
+	\begin{lstlisting}[language=Python]
+def access_shelf_without_lock(robot_id):
+    global shelf_available, current_robot
+    if shelf_available:
+        shelf_available = False
+        current_robot = robot_id
+        time.sleep(random.uniform(1.0, 2.0))
+        shelf_available = True
+        current_robot = None
+\end{lstlisting}
+\end{file}
+
+The critical issue occurs in the sequence between checking if shelf\_available is True and setting it to False. If two robots check the condition almost simultaneously:
+
+\begin{enumerate}
+	\item Robot A checks shelf\_available (finding it True)
+	\item Before Robot A sets shelf\_available = False, Robot B also checks shelf\_available (also finding it True)
+	\item Both robots now believe they have exclusive access to the shelf
+	\item Both robots proceed to access the shelf simultaneously, causing a collision
+\end{enumerate}
+
+This demonstrates a classic race condition where the outcome depends on the precise timing of thread execution.
+
+
+\section{The Solution: Mutex Locks for Synchronization}
+\subsection{Synchronization Technique: Mutex Lock}
+The solution implements a mutex (mutual exclusion) lock using Python's threading.Lock(). A mutex ensures that only one thread can access a critical section of code at any given time, preventing race conditions.
+\subsection{Implementation Details}
+
+\begin{file}[Main.py]
+	\begin{lstlisting}[language=Python]
+def access_shelf_with_lock(robot_id):
+    global shelf_available, current_robot
+    time.sleep(random.uniform(0.5, 1.0))
+    with lock:
+        shelf_available = False
+        current_robot = robot_id
+        time.sleep(random.uniform(1.0, 2.0))
+        shelf_available = True
+        current_robot = None
+\end{lstlisting}
+\end{file}
+
+The key improvements in this implementation are:
+
+The ``with lock:`` statement creates a critical section that only one thread can enter at a time.
+When a robot thread enters this section, it acquires the lock, preventing other robots from entering until it releases the lock.
+The entire sequence of checking availability, marking the shelf as occupied, performing the task, and marking it as available again is protected within this critical section.
+The lock is automatically released when the robot thread exits the with block, even if an exception occurs.
+
+\subsection{How the Lock Resolves the Race Condition}
+When Robot A acquires the lock:
+
+\begin{enumerate}
+	\item Robot A enters the critical section and sets shelf\_available = False
+	\item Robot B attempts to acquire the lock but must wait
+	\item Robot A completes its task, sets shelf\_available = True, and releases the lock
+	\item Only then can Robot B acquire the lock and access the shelf
+\end{enumerate}
+
+This sequential access eliminates the possibility of collisions and ensures data consistency.
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=0.6\textwidth]{./images/good_ending.png}
+\end{figure}
+
+\section{Technical Benefits and Considerations}
+\subsection{Advantages of the Lock-Based Solution}
+
+\begin{itemize}
+	\item Deterministic Behavior: The system now behaves predictably regardless of thread timing.
+	\item Data Integrity: Shared variables are protected from simultaneous access.
+	\item Safety: In a physical implementation, robot collisions would be prevented.
+	\item Simplicity: The threading.Lock provides a straightforward synchronization mechanism.
+\end{itemize}
+\end{document}
